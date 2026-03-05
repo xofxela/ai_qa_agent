@@ -7,8 +7,12 @@ on:
     branches: [ master, develop ]
   workflow_dispatch:
     inputs:
+      protocol:
+        description: 'Protocol (rest or graphql)'
+        required: false
+        default: 'rest'
       spec_url:
-        description: 'OpenAPI spec URL (overrides default)'
+        description: 'OpenAPI spec URL or GraphQL endpoint'  
         required: false
         default: ''
       api_base_url:
@@ -28,6 +32,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  PROTOCOL: ${{ github.event.inputs.protocol || 'rest' }}
   OPENAPI_SPEC_URL: ${{ github.event.inputs.spec_url || 'examples/openapi.json' }}
   API_BASE_URL: ${{ github.event.inputs.api_base_url || secrets.API_BASE_URL || 'https://api.example.com/' }}
   REPORTS_DIR: reports
@@ -59,7 +64,7 @@ jobs:
           OPENAPI_SPEC_URL: ${{ env.OPENAPI_SPEC_URL }}
           API_BASE_URL: ${{ env.API_BASE_URL }}
         run: |
-          python -m src.main --spec "$OPENAPI_SPEC_URL" --base-url "$API_BASE_URL"
+          python -m src.main --protocol "$PROTOCOL" --spec "$OPENAPI_SPEC_URL" --base-url "$API_BASE_URL"
 
       - name: Install Allure CLI
         run: |
