@@ -1,0 +1,80 @@
+name: AI QA Agent Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      spec_url:
+        description: 'OpenAPI spec URL (overrides default)'
+        required: false
+        default: ''
+      api_base_url:
+        description: 'Base URL for API (overrides default)'
+        required: false
+        default: ''
+
+env:
+  OPENAPI_SPEC_URL: ${{ github.event.inputs.spec_url || 'examples/openapi.json' }}
+  API_BASE_URL: ${{ github.event.inputs.api_base_url || secrets.API_BASE_URL || 'https://api.example.com/' }}
+  REPORTS_DIR: reports
+  TESTS_DIR: generated_tests
+
+jobs:
+  run-ai-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run AI QA Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAPI_SPEC_URL: ${{ env.OPENAPI_SPEC_URL }}
+          API_BASE_URL: ${{ env.API_BASE_URL }}
+        run: |
+          python -m src.main --spec "$OPENAPI_SPEC_URL" --base-url "$API_BASE_URL"
+
+      - name: Install Allure CLI
+        run: |
+          sudo apt-add-repository ppa:qameta/allure -y
+          sudo apt-get update
+          sudo apt-get install allure -y
+
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          allure generate ${{ env.REPORTS_DIR }} -o allure-report --clean
+        continue-on-error: true
+
+      - name: Upload Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+          retention-days: 14
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            ${{ env.REPORTS_DIR }}
+            ${{ env.TESTS_DIR }}
+          retention-days: 14

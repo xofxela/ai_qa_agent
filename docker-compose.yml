@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  ai-qa-agent:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./examples:/app/examples
+      - ./reports:/app/reports
+    command: python -m src.main
