@@ -2,9 +2,9 @@ name: AI QA Agent Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ master, develop ]
   workflow_dispatch:
     inputs:
       spec_url:
@@ -91,21 +91,21 @@ jobs:
             ${{ env.TESTS_DIR }}
           retention-days: 14
 
-      # Шаги для публикации на GitHub Pages (только для ветки main)
+      # Шаги для публикации на GitHub Pages (только для ветки master)
       - name: Upload Allure Report as Pages Artifact
-        if: github.ref == 'refs/heads/main' && always()
+        if: github.ref == 'refs/heads/master' && always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: allure-report
 
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main' && always()
+        if: github.ref == 'refs/heads/master' && always()
         uses: actions/deploy-pages@v4
 
       - name: Display test summary
         if: always()
         run: |
           echo "Pipeline finished. Check artifacts for Allure report and test results."
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          if [ "${{ github.ref }}" = "refs/heads/master" ]; then
             echo "Allure report will be available at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
           fi
