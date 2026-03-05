@@ -21,6 +21,7 @@ env:
   API_BASE_URL: ${{ github.event.inputs.api_base_url || secrets.API_BASE_URL || 'https://api.example.com/' }}
   REPORTS_DIR: reports
   TESTS_DIR: generated_tests
+  ALLURE_VERSION: 2.33.0   # можно обновлять при необходимости
 
 jobs:
   run-ai-agent:
@@ -51,17 +52,19 @@ jobs:
 
       - name: Install Allure CLI
         run: |
-          sudo apt-add-repository ppa:qameta/allure -y
-          sudo apt-get update
-          sudo apt-get install allure -y
+          # Скачиваем allure с GitHub releases
+          wget -q https://github.com/allure-framework/allure2/releases/download/${{ env.ALLURE_VERSION }}/allure-${{ env.ALLURE_VERSION }}.tgz
+          tar -xzf allure-${{ env.ALLURE_VERSION }}.tgz
+          # Добавляем в PATH для следующих шагов
+          echo "$(pwd)/allure-${{ env.ALLURE_VERSION }}/bin" >> $GITHUB_PATH
 
       - name: Generate Allure Report
-        if: always()
+        if: always()  # запускать даже при падении тестов
         run: |
           allure generate ${{ env.REPORTS_DIR }} -o allure-report --clean
         continue-on-error: true
 
-      - name: Upload Allure Report
+      - name: Upload Allure Report as Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -69,7 +72,7 @@ jobs:
           path: allure-report
           retention-days: 14
 
-      - name: Upload Test Results
+      - name: Upload Test Results (raw) as Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -78,3 +81,8 @@ jobs:
             ${{ env.REPORTS_DIR }}
             ${{ env.TESTS_DIR }}
           retention-days: 14
+
+      - name: Display test summary
+        if: always()
+        run: |
+          echo "Pipeline finished. Check artifacts for Allure report and test results."
