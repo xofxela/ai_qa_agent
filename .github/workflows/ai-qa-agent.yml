@@ -16,12 +16,23 @@ on:
         required: false
         default: ''
 
+# Разрешения для деплоя на GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Обеспечиваем последовательный деплой
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 env:
   OPENAPI_SPEC_URL: ${{ github.event.inputs.spec_url || 'examples/openapi.json' }}
   API_BASE_URL: ${{ github.event.inputs.api_base_url || secrets.API_BASE_URL || 'https://api.example.com/' }}
   REPORTS_DIR: reports
   TESTS_DIR: generated_tests
-  ALLURE_VERSION: 2.33.0   # можно обновлять при необходимости
+  ALLURE_VERSION: 2.33.0
 
 jobs:
   run-ai-agent:
@@ -52,19 +63,17 @@ jobs:
 
       - name: Install Allure CLI
         run: |
-          # Скачиваем allure с GitHub releases
           wget -q https://github.com/allure-framework/allure2/releases/download/${{ env.ALLURE_VERSION }}/allure-${{ env.ALLURE_VERSION }}.tgz
           tar -xzf allure-${{ env.ALLURE_VERSION }}.tgz
-          # Добавляем в PATH для следующих шагов
           echo "$(pwd)/allure-${{ env.ALLURE_VERSION }}/bin" >> $GITHUB_PATH
 
       - name: Generate Allure Report
-        if: always()  # запускать даже при падении тестов
+        if: always()
         run: |
           allure generate ${{ env.REPORTS_DIR }} -o allure-report --clean
         continue-on-error: true
 
-      - name: Upload Allure Report as Artifact
+      - name: Upload Allure Report as Artifact (for debugging)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -82,7 +91,21 @@ jobs:
             ${{ env.TESTS_DIR }}
           retention-days: 14
 
+      # Шаги для публикации на GitHub Pages (только для ветки main)
+      - name: Upload Allure Report as Pages Artifact
+        if: github.ref == 'refs/heads/main' && always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: allure-report
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' && always()
+        uses: actions/deploy-pages@v4
+
       - name: Display test summary
         if: always()
         run: |
           echo "Pipeline finished. Check artifacts for Allure report and test results."
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "Allure report will be available at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          fi
