@@ -2,6 +2,7 @@ import subprocess
 import json
 import os
 import time
+import uuid
 from src.utils.logger import logger
 from typing import Dict, Any, List
 
@@ -10,23 +11,23 @@ class GrpcurlExecutor:
         self.server_address = server_address
         self.reports_dir = reports_dir
         os.makedirs(self.reports_dir, exist_ok=True)
+        logger.info(f"grpcurl executor initialized. Reports will be saved to {os.path.abspath(self.reports_dir)}")
 
     async def run_tests(self) -> Dict[str, Any]:
         logger.info(f"Running gRPC tests via grpcurl against {self.server_address}")
 
         services = self._list_services()
         if not services:
+            logger.error("No services found")
             return {"total": 0, "passed": 0, "failed": 0, "details": [], "error": "No services found"}
 
         results = {"total": 0, "passed": 0, "failed": 0, "details": []}
         for service in services:
-            # Skip reflection service
             if service == "grpc.reflection.v1alpha.ServerReflection":
                 continue
 
             methods = self._list_methods(service)
             for method_full in methods:
-                # Extract short method name (last part after dot)
                 method_short = method_full.split('.')[-1]
                 success, error, output = self._call_method(service, method_short)
                 results["total"] += 1
@@ -39,16 +40,18 @@ class GrpcurlExecutor:
                     "method": method_short,
                     "success": success,
                     "error": error if not success else None,
-                    "output": output[:500] if output else None
+                    "output": output[:500] if output else None,
+                    "full_output": output if output else None
                 }
                 results["details"].append(details)
                 self._save_allure_result(service, method_short, details)
 
+        saved_files = [f for f in os.listdir(self.reports_dir) if f.startswith("grpc_") and f.endswith(".json")]
+        logger.info(f"Saved {len(saved_files)} Allure result files in {self.reports_dir}")
         logger.info(f"grpcurl tests completed: {results['passed']}/{results['total']} passed")
         return results
 
     def _list_services(self) -> List[str]:
-        """Get list of services via grpcurl."""
         cmd = ["grpcurl", "-plaintext", self.server_address, "list"]
         try:
             output = subprocess.check_output(cmd, stderr=subprocess.PIPE, text=True)
@@ -60,7 +63,6 @@ class GrpcurlExecutor:
             return []
 
     def _list_methods(self, service: str) -> List[str]:
-        """Get list of methods for a service (full names with dots)."""
         cmd = ["grpcurl", "-plaintext", self.server_address, "list", service]
         try:
             output = subprocess.check_output(cmd, stderr=subprocess.PIPE, text=True)
@@ -72,8 +74,6 @@ class GrpcurlExecutor:
             return []
 
     def _call_method(self, service: str, method: str) -> tuple[bool, str, str]:
-        """Call method with empty JSON request {}.
-        method should be short method name (without service prefix)."""
         full_method = f"{service}/{method}"
         cmd = ["grpcurl", "-plaintext", "-d", "{}", self.server_address, full_method]
         try:
@@ -86,30 +86,45 @@ class GrpcurlExecutor:
 
     def _save_allure_result(self, service: str, method: str, details: Dict):
         """Save test result in Allure-compatible JSON format."""
-        result = {
-            "name": f"{service}.{method}",
-            "status": "passed" if details["success"] else "failed",
-            "statusDetails": {
-                "message": details["error"] if details["error"] else "",
-                "trace": ""
-            },
-            "stage": "finished",
-            "start": int(time.time() * 1000),
-            "stop": int(time.time() * 1000),
-            "attachments": [
-                {
+        try:
+            result_id = str(uuid.uuid4())
+            timestamp = int(time.time() * 1000)
+            filename_base = f"grpc_{service.replace('.', '_')}_{method}_{timestamp}"
+            json_file = f"{filename_base}.json"
+            json_path = os.path.join(self.reports_dir, json_file)
+
+            attachments = []
+            if details.get("full_output"):
+                output_file = f"{filename_base}-output.txt"
+                output_path = os.path.join(self.reports_dir, output_file)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(details["full_output"])
+                attachments.append({
                     "name": "Output",
                     "type": "text/plain",
-                    "source": details.get("output", "")
-                }
-            ] if details.get("output") else [],
-            "labels": [
-                {"name": "protocol", "value": "grpc"},
-                {"name": "service", "value": service},
-                {"name": "method", "value": method}
-            ]
-        }
-        filename = f"grpc_{service.replace('.', '_')}_{method}_{int(time.time() * 1000)}.json"
-        filepath = os.path.join(self.reports_dir, filename)
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(result, f, indent=2)
+                    "source": output_file
+                })
+
+            result = {
+                "uuid": result_id,
+                "name": f"{service}.{method}",
+                "status": "passed" if details["success"] else "failed",
+                "statusDetails": {
+                    "message": details["error"] if details["error"] else "",
+                    "trace": ""
+                },
+                "stage": "finished",
+                "start": timestamp,
+                "stop": timestamp,
+                "attachments": attachments,
+                "labels": [
+                    {"name": "protocol", "value": "grpc"},
+                    {"name": "service", "value": service},
+                    {"name": "method", "value": method}
+                ]
+            }
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(result, f, indent=2)
+            logger.info(f"Allure result saved: {json_path}")
+        except Exception as e:
+            logger.error(f"Failed to save allure result for {service}.{method}: {e}")

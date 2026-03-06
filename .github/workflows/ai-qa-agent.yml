@@ -64,6 +64,8 @@ jobs:
             sudo mv grpcurl /usr/local/bin/
           else
             echo "Binary download failed, falling back to go install"
+            # Устанавливаем Go, если его нет
+            sudo apt-get update && sudo apt-get install -y golang-go
             go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
             echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           fi
@@ -87,6 +89,15 @@ jobs:
             --protocol "${{ env.PROTOCOL }}" \
             --spec "${{ steps.spec_arg.outputs.SPEC_ARG }}" \
             --base-url "${{ env.API_BASE_URL }}"
+
+      # Отладочный шаг для проверки reports (особенно для gRPC)
+      - name: Debug reports folder
+        if: env.PROTOCOL == 'grpc' && always()
+        run: |
+          echo "Contents of ${{ env.REPORTS_DIR }} directory:"
+          ls -la ${{ env.REPORTS_DIR }}/
+          echo "First few lines of a report file (if any):"
+          head -n 20 ${{ env.REPORTS_DIR }}/*.json 2>/dev/null || echo "No JSON files found"
 
       - name: Install Allure CLI
         run: |
