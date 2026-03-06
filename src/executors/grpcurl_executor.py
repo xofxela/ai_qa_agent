@@ -89,13 +89,13 @@ class GrpcurlExecutor:
         try:
             result_id = str(uuid.uuid4())
             timestamp = int(time.time() * 1000)
-            filename_base = f"grpc_{service.replace('.', '_')}_{method}_{timestamp}"
-            json_file = f"{filename_base}.json"
-            json_path = os.path.join(self.reports_dir, json_file)
+            # Важно: имя файла должно заканчиваться на -result.json
+            filename = f"grpc_{service.replace('.', '_')}_{method}_{timestamp}-result.json"
+            filepath = os.path.join(self.reports_dir, filename)
 
             attachments = []
             if details.get("full_output"):
-                output_file = f"{filename_base}-output.txt"
+                output_file = f"grpc_{service.replace('.', '_')}_{method}_{timestamp}-output.txt"
                 output_path = os.path.join(self.reports_dir, output_file)
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(details["full_output"])
@@ -123,8 +123,8 @@ class GrpcurlExecutor:
                     {"name": "method", "value": method}
                 ]
             }
-            with open(json_path, 'w', encoding='utf-8') as f:
+            with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2)
-            logger.info(f"Allure result saved: {json_path}")
+            logger.info(f"Allure result saved: {filepath}")
         except Exception as e:
             logger.error(f"Failed to save allure result for {service}.{method}: {e}")
