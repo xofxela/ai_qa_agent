@@ -4,33 +4,31 @@ on:
   workflow_dispatch:
     inputs:
       protocol:
-        description: 'Protocol (rest or graphql)'
+        description: 'Protocol (rest, graphql, grpc)'
         required: false
         default: 'rest'
       spec_url:
-        description: 'OpenAPI spec URL or GraphQL endpoint'  
+        description: 'OpenAPI spec URL or GraphQL endpoint (ignored for gRPC)'
         required: false
         default: ''
       api_base_url:
-        description: 'Base URL for API (overrides default)'
+        description: 'Base URL for API (REST/GraphQL) or server address (gRPC: host:port)'
         required: false
         default: ''
 
-# Разрешения для деплоя на GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Обеспечиваем последовательный деплой
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 env:
   PROTOCOL: ${{ github.event.inputs.protocol || 'rest' }}
-  OPENAPI_SPEC_URL: ${{ github.event.inputs.spec_url || 'examples/openapi.json' }}
-  API_BASE_URL: ${{ github.event.inputs.api_base_url || secrets.API_BASE_URL || 'https://api.example.com/' }}
+  SPEC_URL: ${{ github.event.inputs.spec_url || 'examples/openapi.json' }}
+  API_BASE_URL: ${{ github.event.inputs.api_base_url || secrets.API_BASE_URL || '' }}
   REPORTS_DIR: reports
   TESTS_DIR: generated_tests
   ALLURE_VERSION: 2.33.0
@@ -54,18 +52,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install grpcurl
+      # Устанавливаем grpcurl только для gRPC протокола
+      - name: Install grpcurl (for gRPC)
+        if: env.PROTOCOL == 'grpc'
         run: |
           curl -L https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_amd64.tar.gz | tar xz
           sudo mv grpcurl /usr/local/bin/
-          
+
+      # Определяем аргумент spec: для gRPC передаём пустую строку, иначе SPEC_URL
+      - name: Set spec argument
+        id: spec_arg
+        run: |
+          if [ "${{ env.PROTOCOL }}" = "grpc" ]; then
+            echo "SPEC_ARG=" >> $GITHUB_OUTPUT
+          else
+            echo "SPEC_ARG=${{ env.SPEC_URL }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run AI QA Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENAPI_SPEC_URL: ${{ env.OPENAPI_SPEC_URL }}
           API_BASE_URL: ${{ env.API_BASE_URL }}
         run: |
-          python -m src.main --protocol "$PROTOCOL" --spec "$OPENAPI_SPEC_URL" --base-url "$API_BASE_URL"
+          python -m src.main \
+            --protocol "${{ env.PROTOCOL }}" \
+            --spec "${{ steps.spec_arg.outputs.SPEC_ARG }}" \
+            --base-url "${{ env.API_BASE_URL }}"
 
       - name: Install Allure CLI
         run: |
@@ -79,7 +91,7 @@ jobs:
           allure generate ${{ env.REPORTS_DIR }} -o allure-report --clean
         continue-on-error: true
 
-      - name: Upload Allure Report as Artifact (for debugging)
+      - name: Upload Allure Report as Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -97,7 +109,7 @@ jobs:
             ${{ env.TESTS_DIR }}
           retention-days: 14
 
-      # Шаги для публикации на GitHub Pages (только для ветки master)
+      # Публикация на GitHub Pages (только для ветки master)
       - name: Upload Allure Report as Pages Artifact
         if: github.ref == 'refs/heads/master' && always()
         uses: actions/upload-pages-artifact@v3
@@ -111,7 +123,8 @@ jobs:
       - name: Display test summary
         if: always()
         run: |
-          echo "Pipeline finished. Check artifacts for Allure report and test results."
+          echo "Pipeline finished for protocol: ${{ env.PROTOCOL }}"
+          echo "Check artifacts for Allure report and test results."
           if [ "${{ github.ref }}" = "refs/heads/master" ]; then
             echo "Allure report will be available at: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
           fi
