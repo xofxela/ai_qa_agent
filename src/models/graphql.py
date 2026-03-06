@@ -9,11 +9,10 @@ class GraphQLArgument(BaseModel):
 
 class GraphQLField(BaseModel):
     name: str
+    type: str
     description: Optional[str] = None
     args: List[GraphQLArgument] = []
-    type: str
-    is_deprecated: bool = False
+    fields: List[Dict[str, Any]] = []  # вложенные поля для объектных типов
 
 class GraphQLSchema(BaseModel):
     query_fields: List[GraphQLField]
-    # mutation_fields и subscription_fields можно добавить позже
