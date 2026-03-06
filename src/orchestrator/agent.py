@@ -1,11 +1,10 @@
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Literal, Optional
 from src.parsers.base import SpecParser
 from src.parsers.openapi_parser import OpenApiParser
 from src.parsers.graphql_parser import GraphQLParser
 from src.generators.base import TestGenerator
 from src.generators.pytest_generator import PytestGenerator
 from src.generators.graphql_generator import GraphQLTestGenerator
-from src.generators.grpc_generator import GrpcTestGenerator
 from src.executors.base import TestExecutor
 from src.executors.pytest_executor import PytestExecutor
 from src.executors.grpcurl_executor import GrpcurlExecutor
@@ -22,7 +21,8 @@ class QAAgent:
         self.llm_provider = self._create_llm_provider()
         self.parser = self._create_parser()
         self.generator = self._create_generator()
-        self.executor = PytestExecutor()
+        # Для REST и GraphQL используем pytest executor
+        self.executor = PytestExecutor() if protocol != "grpc" else None
         self.reporter = AllureReporter()
         self.logger = logger
 
@@ -33,23 +33,25 @@ class QAAgent:
             model=settings.default_model
         )
 
-    def _create_parser(self) -> SpecParser:
+    def _create_parser(self) -> Optional[SpecParser]:
         if self.protocol == "rest":
             return OpenApiParser()
         elif self.protocol == "graphql":
             return GraphQLParser()
         elif self.protocol == "grpc":
-            return GrpcReflectionParser()
+            # Для gRPC парсер не используется
+            return None
         else:
             raise ValueError(f"Unsupported protocol: {self.protocol}")
 
-    def _create_generator(self) -> TestGenerator:
+    def _create_generator(self) -> Optional[TestGenerator]:
         if self.protocol == "rest":
             return PytestGenerator(llm_provider=self.llm_provider)
         elif self.protocol == "graphql":
             return GraphQLTestGenerator(llm_provider=self.llm_provider)
         elif self.protocol == "grpc":
-            return GrpcTestGenerator(llm_provider=self.llm_provider)
+            # Для gRPC генератор не используется
+            return None
         else:
             raise ValueError(f"Unsupported protocol: {self.protocol}")
 
@@ -57,37 +59,49 @@ class QAAgent:
         self.logger.info(f"Starting pipeline for protocol {self.protocol}, spec: {spec_source}")
 
         if self.protocol == "rest":
+            if self.parser is None:
+                raise RuntimeError("Parser not initialized for REST")
             endpoints = await self.parser.parse(spec_source)
             self.logger.info(f"Parsed {len(endpoints)} REST endpoints")
+            if self.generator is None:
+                raise RuntimeError("Generator not initialized for REST")
             test_file = await self.generator.generate_test_file(
                 endpoints=endpoints,
                 output_path=f"{output_dir}/test_{self.protocol}.py",
                 base_url=base_url
             )
+            results = await self.executor.run_tests(
+                test_path=test_file,
+                report_dir=settings.reports_dir
+            )
         elif self.protocol == "graphql":
+            if self.parser is None:
+                raise RuntimeError("Parser not initialized for GraphQL")
             schema = await self.parser.parse(spec_source)
             self.logger.info(f"Parsed {len(schema.query_fields)} GraphQL queries")
+            if self.generator is None:
+                raise RuntimeError("Generator not initialized for GraphQL")
             test_file = await self.generator.generate_test_file(
                 schema=schema,
                 output_path=f"{output_dir}/test_{self.protocol}.py",
                 endpoint_url=base_url
             )
+            results = await self.executor.run_tests(
+                test_path=test_file,
+                report_dir=settings.reports_dir
+            )
         elif self.protocol == "grpc":
             executor = GrpcurlExecutor(base_url, reports_dir=settings.reports_dir)
             results = await executor.run_tests()
+            # Для gRPC у нас нет test_file и отчёт генерируется внутри executor
             return {
                 "test_file": None,
                 "results": results,
-                "report": None,
+                "report": None,  # Можно будет добавить генерацию отчёта позже
                 "protocol": self.protocol
             }
         else:
             raise ValueError(f"Unsupported protocol: {self.protocol}")
-
-        results = await self.executor.run_tests(
-            test_path=test_file,
-            report_dir=settings.reports_dir
-        )
 
         report_url = None
         if results:
@@ -97,7 +111,7 @@ class QAAgent:
             )
 
         return {
-            "test_file": test_file,
+            "test_file": test_file if self.protocol != "grpc" else None,
             "results": results,
             "report": report_url,
             "protocol": self.protocol
