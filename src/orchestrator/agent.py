@@ -2,7 +2,6 @@ from typing import Dict, Any, Literal
 from src.parsers.base import SpecParser
 from src.parsers.openapi_parser import OpenApiParser
 from src.parsers.graphql_parser import GraphQLParser
-from src.parsers.grpc_reflection_parser import GrpcReflectionParser
 from src.generators.base import TestGenerator
 from src.generators.pytest_generator import PytestGenerator
 from src.generators.graphql_generator import GraphQLTestGenerator
@@ -74,7 +73,7 @@ class QAAgent:
                 endpoint_url=base_url
             )
         elif self.protocol == "grpc":
-            executor = GrpcurlExecutor(base_url)
+            executor = GrpcurlExecutor(base_url, reports_dir=settings.reports_dir)
             results = await executor.run_tests()
             return {
                 "test_file": None,
