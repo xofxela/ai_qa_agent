@@ -53,11 +53,20 @@ jobs:
           pip install -r requirements.txt
 
       # Устанавливаем grpcurl только для gRPC протокола
-      - name: Install grpcurl (for gRPC)
+      - name: Install grpcurl
         if: env.PROTOCOL == 'grpc'
         run: |
-          curl -L https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_amd64.tar.gz | tar xz
-          sudo mv grpcurl /usr/local/bin/
+          set -e
+          # Пробуем скачать предварительно собранный бинарник
+          curl -L -o grpcurl.tar.gz https://github.com/fullstorydev/grpcurl/releases/download/v1.9.2/grpcurl_1.9.2_linux_amd64.tar.gz || true
+          if file grpcurl.tar.gz | grep -q 'gzip compressed data'; then
+            tar -xzf grpcurl.tar.gz
+            sudo mv grpcurl /usr/local/bin/
+          else
+            echo "Binary download failed, falling back to go install"
+            go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+            echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          fi
 
       # Определяем аргумент spec: для gRPC передаём пустую строку, иначе SPEC_URL
       - name: Set spec argument
