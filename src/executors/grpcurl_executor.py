@@ -118,9 +118,11 @@ class GrpcurlExecutor:
                 "stop": timestamp,
                 "attachments": attachments,
                 "labels": [
-                    {"name": "protocol", "value": "grpc"},
-                    {"name": "service", "value": service},
-                    {"name": "method", "value": method}
+                    {"name": "parentSuite", "value": "generated_tests"},
+                    {"name": "suite", "value": "test_grpc"},
+                    {"name": "subSuite", "value": service},
+                    {"name": "method", "value": method},
+                    {"name": "protocol", "value": "grpc"}
                 ]
             }
             with open(filepath, 'w', encoding='utf-8') as f:
