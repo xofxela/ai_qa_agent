@@ -9,3 +9,6 @@ allure-pytest>=2.13.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
 gql[httpx]>=3.5.0
+grpcio>=1.60.0
+protobuf==5.29.4
+grpcio-reflection>=1.60.0
