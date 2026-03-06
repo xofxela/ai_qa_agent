@@ -5,4 +5,4 @@ __pycache__/
 reports/
 venv/
 script.sh
-allure-report/
+allure-report/*
