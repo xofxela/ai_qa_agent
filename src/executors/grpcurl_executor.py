@@ -20,11 +20,13 @@ class GrpcurlExecutor:
 
         results = {"total": 0, "passed": 0, "failed": 0, "details": []}
         for service in services:
+            # Skip reflection service
             if service == "grpc.reflection.v1alpha.ServerReflection":
                 continue
 
             methods = self._list_methods(service)
             for method_full in methods:
+                # Extract short method name (last part after dot)
                 method_short = method_full.split('.')[-1]
                 success, error, output = self._call_method(service, method_short)
                 results["total"] += 1
@@ -40,19 +42,38 @@ class GrpcurlExecutor:
                     "output": output[:500] if output else None
                 }
                 results["details"].append(details)
-                # Сохраняем результат в Allure-совместимом формате
                 self._save_allure_result(service, method_short, details)
 
         logger.info(f"grpcurl tests completed: {results['passed']}/{results['total']} passed")
         return results
 
     def _list_services(self) -> List[str]:
-        # ... (без изменений)
+        """Get list of services via grpcurl."""
+        cmd = ["grpcurl", "-plaintext", self.server_address, "list"]
+        try:
+            output = subprocess.check_output(cmd, stderr=subprocess.PIPE, text=True)
+            services = [s.strip() for s in output.splitlines() if s.strip()]
+            logger.info(f"Found services: {services}")
+            return services
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to list services: {e.stderr}")
+            return []
 
     def _list_methods(self, service: str) -> List[str]:
-        # ... (без изменений)
+        """Get list of methods for a service (full names with dots)."""
+        cmd = ["grpcurl", "-plaintext", self.server_address, "list", service]
+        try:
+            output = subprocess.check_output(cmd, stderr=subprocess.PIPE, text=True)
+            methods = [s.strip() for s in output.splitlines() if s.strip()]
+            logger.debug(f"Service {service} methods: {methods}")
+            return methods
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to list methods for {service}: {e.stderr}")
+            return []
 
     def _call_method(self, service: str, method: str) -> tuple[bool, str, str]:
+        """Call method with empty JSON request {}.
+        method should be short method name (without service prefix)."""
         full_method = f"{service}/{method}"
         cmd = ["grpcurl", "-plaintext", "-d", "{}", self.server_address, full_method]
         try:
@@ -64,8 +85,7 @@ class GrpcurlExecutor:
             return False, e.stderr, ""
 
     def _save_allure_result(self, service: str, method: str, details: Dict):
-        """Сохраняет результат теста в формате, совместимом с Allure."""
-        # Формируем структуру allure-результата
+        """Save test result in Allure-compatible JSON format."""
         result = {
             "name": f"{service}.{method}",
             "status": "passed" if details["success"] else "failed",
@@ -89,7 +109,6 @@ class GrpcurlExecutor:
                 {"name": "method", "value": method}
             ]
         }
-        # Генерируем уникальное имя файла
         filename = f"grpc_{service.replace('.', '_')}_{method}_{int(time.time() * 1000)}.json"
         filepath = os.path.join(self.reports_dir, filename)
         with open(filepath, 'w', encoding='utf-8') as f:
