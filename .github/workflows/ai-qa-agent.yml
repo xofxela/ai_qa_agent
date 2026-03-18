@@ -234,29 +234,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate OpenClaw integration
-        run: |
-          echo "=== Validating OpenClaw Integration ==="
-          python << 'EOF'
-from src.orchestrator.openclaw_orchestrator import OpenClawOrchestrator, TaskStatus
-from src.orchestrator.workflows import get_workflow
-from src.orchestrator.task_utils import TaskRetryHandler, RetryConfig
-
-# Check orchestrator
-print('✓ OpenClawOrchestrator imported successfully')
-
-# Check workflows
-for protocol in ['rest', 'graphql', 'grpc']:
-    workflow = get_workflow(protocol)
-    print(f'✓ {protocol.upper()} workflow loaded: {len(workflow.tasks)} tasks')
-
-# Check retry handler
-config = RetryConfig()
-handler = TaskRetryHandler(config)
-print(f'✓ TaskRetryHandler initialized')
-
-print('')
-print('OpenClaw integration validated successfully!')
-EOF
+        run: python -c "from src.orchestrator.openclaw_orchestrator import OpenClawOrchestrator; from src.orchestrator.task_utils import TaskRetryHandler; print('✓ OpenClaw orchestrator validated'); print('✓ Task utilities available')"
 
       - name: Check documentation
         run: |

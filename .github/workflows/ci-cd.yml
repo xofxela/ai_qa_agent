@@ -108,13 +108,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Check imports
-        run: |
-          python -c "
-import src.main
-import src.config
-import src.orchestrator
-print('✓ All modules import successfully')
-"
+        run: python -c "import src.main; import src.config; import src.orchestrator; print('✓ All modules import successfully')"
 
   security:
     name: Security Check
