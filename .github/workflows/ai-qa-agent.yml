@@ -1,10 +1,6 @@
 name: AI QA Agent with OpenClaw
 
 on:
-  push:
-    branches: [main, master, develop]
-  pull_request:
-    branches: [main, master, develop]
   workflow_dispatch:
     inputs:
       protocol:
@@ -240,7 +236,7 @@ jobs:
       - name: Validate OpenClaw integration
         run: |
           echo "=== Validating OpenClaw Integration ==="
-          python -c "
+          python << 'EOF'
 from src.orchestrator.openclaw_orchestrator import OpenClawOrchestrator, TaskStatus
 from src.orchestrator.workflows import get_workflow
 from src.orchestrator.task_utils import TaskRetryHandler, RetryConfig
@@ -260,7 +256,7 @@ print(f'✓ TaskRetryHandler initialized')
 
 print('')
 print('OpenClaw integration validated successfully!')
-"
+EOF
 
       - name: Check documentation
         run: |

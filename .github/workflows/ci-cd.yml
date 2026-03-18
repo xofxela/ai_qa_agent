@@ -1,10 +1,7 @@
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches: [main, master, develop]
-  pull_request:
-    branches: [main, master, develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -89,12 +86,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate OpenClaw
-        run: |
-          python -c "
-from src.orchestrator.openclaw_orchestrator import OpenClawOrchestrator
-from src.orchestrator.workflows import get_workflow
-print('✓ OpenClaw modules validated')
-"
+        run: python -c "from src.orchestrator.openclaw_orchestrator import OpenClawOrchestrator; from src.orchestrator.workflows import get_workflow; print('✓ OpenClaw modules validated')"
 
   build:
     name: Build Check

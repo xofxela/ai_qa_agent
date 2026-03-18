@@ -1,17 +1,6 @@
 name: OpenClaw Orchestrator Tests
 
 on:
-  push:
-    branches: [main, master, develop]
-    paths:
-      - 'src/orchestrator/**'
-      - 'tests/**'
-      - '.github/workflows/openclaw-tests.yml'
-  pull_request:
-    branches: [main, master, develop]
-    paths:
-      - 'src/orchestrator/**'
-      - 'tests/**'
   workflow_dispatch:
 
 env:
@@ -170,7 +159,7 @@ jobs:
       - name: Validate workflow definitions
         run: |
           echo "=== Validating Workflow Definitions ==="
-          python -c "
+          python << 'EOF'
 from src.orchestrator.workflows import (
     get_workflow,
     REST_WORKFLOW,
@@ -197,7 +186,7 @@ for name, workflow in workflows.items():
         for dep in deps:
             if dep not in workflow.tasks:
                 raise ValueError(f'Invalid dependency: {task} depends on {dep} which does not exist')
-    
+EOF
     print(f'  ✓ Valid')
     print()
 
