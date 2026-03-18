@@ -333,19 +333,36 @@ class OpenClawOrchestrator:
             executor = GrpcurlExecutor(base_url, reports_dir=settings.reports_dir)
             results = await executor.run_tests()
             
+            # Mark as COMPLETED even if tests failed (consistent with REST/GraphQL)
+            # The test success/failure is in the data, not the task status
             success = results.get("success", False)
+            
+            if success:
+                self.logger.info(f"✓ gRPC tests passed")
+            else:
+                self.logger.warning(f"⚠ gRPC tests failed or had errors")
+                if results.get('stderr'):
+                    self.logger.warning(f"Errors: {results.get('stderr')[:500]}")
+            
             return TaskResult(
                 task_name="run_grpc_tests",
-                status=TaskStatus.COMPLETED if success else TaskStatus.FAILED,
+                status=TaskStatus.COMPLETED,  # Always mark as completed, not failed
                 data=results,
-                metadata={"server": base_url}
+                metadata={
+                    "server": base_url,
+                    "tests_passed": success,
+                    "return_code": results.get("returncode", -1)
+                }
             )
             
         except Exception as e:
+            self.logger.error(f"gRPC test execution error: {e}")
             return TaskResult(
                 task_name="run_grpc_tests",
-                status=TaskStatus.FAILED,
-                error=str(e)
+                status=TaskStatus.COMPLETED,  # Mark as completed even with error
+                data={"success": False, "error": str(e)},
+                error=str(e),
+                metadata={"tests_passed": False}
             )
 
     async def _task_generate_report(self, output_dir: str) -> TaskResult:
