@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     # Concurrency
     max_concurrent_tasks: int = 5
     
+    # OpenClaw Orchestrator configuration
+    default_orchestrator: str = "openclaw"  # openclaw or legacy
+    orchestrator_enable_monitoring: bool = True
+    orchestrator_enable_retries: bool = True
+    orchestrator_max_retries: int = 3
+    orchestrator_retry_strategy: str = "exponential"  # exponential, linear, immediate
+    orchestrator_task_timeout: int = 300  # seconds
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
